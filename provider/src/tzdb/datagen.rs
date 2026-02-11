@@ -105,41 +105,18 @@ impl IanaIdentifierNormalizer<'_> {
         }
 
         let mut all_identifiers = BTreeSet::default();
-        for zone_id in provider.data.zones.keys() {
-            // Add canonical identifiers.
-            let _ = all_identifiers.insert(&**zone_id);
-        }
 
-        for link_from in provider.data.links.keys() {
-            // Add link / non-canonical identifiers
-            let _ = all_identifiers.insert(link_from);
-        }
-        // Make a sorted list of canonical timezones
-        let norm_vec: Vec<&str> = all_identifiers.iter().copied().collect();
-        let norm_zerovec: VarZeroVec<'static, str> = norm_vec.as_slice().into();
+        // Add canonical identifiers.
+        all_identifiers.extend(provider.data.zones.keys().map(|s| s.as_str()));
 
-        let identifier_map: BTreeMap<Vec<u8>, usize> = all_identifiers
-            .iter()
-            .map(|id| {
-                let normalized_id = norm_vec.binary_search(id).unwrap();
-
-                (id.to_ascii_lowercase().as_bytes().to_vec(), normalized_id)
-            })
-            .collect();
-
-        // A map from noncanonical identifiers to their canonicalized id
-        let mut to_primary_id_map: BTreeMap<usize, usize> = BTreeMap::new();
-        // ECMAScript implementations must support an available named time zone with the identifier "UTC", which must be
-        // the primary time zone identifier for the UTC time zone. In addition, implementations may support any number of other available named time zones.
-        let utc_index = norm_vec.binary_search(&"UTC").unwrap();
-        to_primary_id_map.insert(norm_vec.binary_search(&"Etc/UTC").unwrap(), utc_index);
-        to_primary_id_map.insert(norm_vec.binary_search(&"Etc/GMT").unwrap(), utc_index);
+        // Add link / non-canonical identifiers
+        all_identifiers.extend(provider.data.links.keys().map(|s| s.as_str()));
 
         let mut all_links: BTreeMap<&str, &str> = provider
             .data
             .links
             .iter()
-            .map(|x| (&**x.0, &**x.1))
+            .map(|x| (x.0.as_str(), x.1.as_str()))
             .collect();
 
         // https://tc39.es/ecma402/#sec-use-of-iana-time-zone-database
@@ -152,37 +129,49 @@ impl IanaIdentifierNormalizer<'_> {
             all_links.remove(&*tz.tz);
         }
 
-        // UTC should not map to anything
-        all_links.remove("UTC");
+        // See comment on PACKRAT_OVERRIDES
+        all_links.extend(packrat_overrides);
 
-        for (link_from, mut link_to) in &all_links {
+        // ECMAScript implementations must support an available named time zone with the identifier "UTC", which must be
+        // the primary time zone identifier for the UTC time zone.
+        all_links.remove("UTC");
+        all_links.retain(|_k, v| {
+            if matches!(*v, "Etc/UTC" | "Etc/GMT") {
+                *v = "UTC";
+            }
+            true
+        });
+        all_links.insert("Etc/UTC", "UTC");
+        all_links.insert("Etc/GMT", "UTC");
+
+        let available_id_index = ZeroAsciiIgnoreCaseTrie::from_iter(
+            all_identifiers
+                .iter()
+                .enumerate()
+                .map(|(idx, id)| (id.to_ascii_lowercase().as_bytes().to_vec(), idx)),
+        );
+
+        let non_canonical_identifiers = all_links.iter().map(|(&link_from, &(mut link_to))| {
             // Sometimes links have multiple steps. This happens for Chungking => Chongqing => Shanghai
             while let Some(new_link_to) = all_links.get(link_to) {
                 link_to = new_link_to;
             }
-            if let Some(overrided) = packrat_overrides.get(link_from) {
-                // See comment on PACKRAT_OVERRIDES
-                link_to = overrided;
-            }
-            let link_from = norm_vec.binary_search(link_from).unwrap();
-            let index = if *link_to == "Etc/UTC" || *link_to == "Etc/GMT" {
-                utc_index
-            } else {
-                norm_vec.binary_search(link_to).unwrap()
-            };
-            to_primary_id_map.insert(link_from, index);
-        }
+            (
+                u32::try_from(available_id_index.get(link_from).unwrap()).unwrap(),
+                u32::try_from(available_id_index.get(link_to).unwrap()).unwrap(),
+            )
+        });
 
         Ok(IanaIdentifierNormalizer {
             version: provider.version.into(),
-            available_id_index: ZeroAsciiIgnoreCaseTrie::try_from(&identifier_map)
-                .map_err(IanaDataError::Build)?
-                .convert_store(),
-            non_canonical_identifiers: to_primary_id_map
+            non_canonical_identifiers: non_canonical_identifiers.collect(),
+            available_id_index: available_id_index.convert_store(),
+            normalized_identifiers: all_identifiers
                 .iter()
-                .map(|(x, y)| (u32::try_from(*x).unwrap(), u32::try_from(*y).unwrap()))
-                .collect(),
-            normalized_identifiers: norm_zerovec,
+                .copied()
+                .collect::<Vec<_>>()
+                .as_slice()
+                .into(),
         })
     }
 }
