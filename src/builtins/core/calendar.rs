@@ -16,14 +16,6 @@ use crate::{
 use core::str::FromStr;
 
 use icu_calendar::{
-    cal::{
-        Buddhist, ChineseTraditional, Coptic, Ethiopian, EthiopianEraStyle, Hebrew, Hijri, Indian,
-        Japanese, KoreanTraditional, Persian, Roc,
-    },
-    AnyCalendar, AnyCalendarKind, Calendar as IcuCalendar, Iso, Ref,
-};
-use icu_calendar::{
-    cal::{HijriTabularEpoch, HijriTabularLeapYears},
     options::DateDurationUnit as IcuUnit,
     options::{
         DateAddOptions, DateDifferenceOptions, DateFromFieldsOptions, MissingFieldsStrategy,
@@ -32,7 +24,7 @@ use icu_calendar::{
     preferences::CalendarAlgorithm,
     types::DateDuration as IcuDateDuration,
     types::DateFields,
-    Date, Gregorian,
+    AnyCalendar, AnyCalendarKind, Calendar as IcuCalendar, Date, Iso, Ref,
 };
 use icu_locale_core::extensions::unicode::Value;
 use tinystr::TinyAsciiStr;
@@ -71,106 +63,78 @@ impl Eq for Calendar {}
 
 impl Calendar {
     /// The Buddhist calendar
-    pub const BUDDHIST: Self = Self::new(AnyCalendarKind::Buddhist);
+    pub const BUDDHIST: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Buddhist)));
     /// The Chinese calendar
-    pub const CHINESE: Self = Self::new(AnyCalendarKind::Chinese);
+    pub const CHINESE: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Chinese)));
     /// The Coptic calendar
-    pub const COPTIC: Self = Self::new(AnyCalendarKind::Coptic);
+    pub const COPTIC: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Coptic)));
     /// The Dangi calendar
-    pub const DANGI: Self = Self::new(AnyCalendarKind::Dangi);
+    pub const DANGI: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Dangi)));
     /// The Ethiopian calendar
-    pub const ETHIOPIAN: Self = Self::new(AnyCalendarKind::Ethiopian);
+    pub const ETHIOPIAN: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Ethiopian)));
     /// The Ethiopian Amete Alem calendar
-    pub const ETHIOPIAN_AMETE_ALEM: Self = Self::new(AnyCalendarKind::EthiopianAmeteAlem);
+    pub const ETHIOPIAN_AMETE_ALEM: Self =
+        Self(Ref(&AnyCalendar::new(AnyCalendarKind::EthiopianAmeteAlem)));
     /// The Gregorian calendar
-    pub const GREGORIAN: Self = Self::new(AnyCalendarKind::Gregorian);
+    pub const GREGORIAN: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Gregorian)));
     /// The Hebrew calendar
-    pub const HEBREW: Self = Self::new(AnyCalendarKind::Hebrew);
+    pub const HEBREW: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Hebrew)));
     /// The Indian calendar
-    pub const INDIAN: Self = Self::new(AnyCalendarKind::Indian);
+    pub const INDIAN: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Indian)));
     /// The Hijri Tabular calendar with a Friday epoch
-    pub const HIJRI_TABULAR_FRIDAY: Self = Self::new(AnyCalendarKind::HijriTabularTypeIIFriday);
+    pub const HIJRI_TABULAR_FRIDAY: Self = Self(Ref(&AnyCalendar::new(
+        AnyCalendarKind::HijriTabularTypeIIFriday,
+    )));
     /// The Hijri Tabular calendar with a Thursday epoch
-    pub const HIJRI_TABULAR_THURSDAY: Self = Self::new(AnyCalendarKind::HijriTabularTypeIIThursday);
+    pub const HIJRI_TABULAR_THURSDAY: Self = Self(Ref(&AnyCalendar::new(
+        AnyCalendarKind::HijriTabularTypeIIThursday,
+    )));
     /// The Hijri Umm al-Qura calendar
-    pub const HIJRI_UMM_AL_QURA: Self = Self::new(AnyCalendarKind::HijriUmmAlQura);
+    pub const HIJRI_UMM_AL_QURA: Self =
+        Self(Ref(&AnyCalendar::new(AnyCalendarKind::HijriUmmAlQura)));
     /// The ISO 8601 calendar
-    pub const ISO: Self = Self::new(AnyCalendarKind::Iso);
+    pub const ISO: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Iso)));
     /// The Japanese calendar
-    pub const JAPANESE: Self = Self::new(AnyCalendarKind::Japanese);
+    pub const JAPANESE: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Japanese)));
     /// The Persian calendar
-    pub const PERSIAN: Self = Self::new(AnyCalendarKind::Persian);
+    pub const PERSIAN: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Persian)));
     /// The ROC calendar
-    pub const ROC: Self = Self::new(AnyCalendarKind::Roc);
+    pub const ROC: Self = Self(Ref(&AnyCalendar::new(AnyCalendarKind::Roc)));
 
     /// Create a `Calendar` from an ICU [`AnyCalendarKind`].
     #[warn(clippy::wildcard_enum_match_arm)] // Warns if the calendar kind gets out of sync.
     pub const fn new(kind: AnyCalendarKind) -> Self {
-        let cal = match kind {
-            AnyCalendarKind::Buddhist => &AnyCalendar::Buddhist(Buddhist),
-            AnyCalendarKind::Chinese => const { &AnyCalendar::Chinese(ChineseTraditional::new()) },
-            AnyCalendarKind::Coptic => &AnyCalendar::Coptic(Coptic),
-            AnyCalendarKind::Dangi => const { &AnyCalendar::Dangi(KoreanTraditional::new()) },
-            AnyCalendarKind::Ethiopian => {
-                const {
-                    &AnyCalendar::Ethiopian(Ethiopian::new_with_era_style(
-                        EthiopianEraStyle::AmeteMihret,
-                    ))
-                }
-            }
-            AnyCalendarKind::EthiopianAmeteAlem => {
-                const {
-                    &AnyCalendar::Ethiopian(Ethiopian::new_with_era_style(
-                        EthiopianEraStyle::AmeteAlem,
-                    ))
-                }
-            }
-            AnyCalendarKind::Gregorian => &AnyCalendar::Gregorian(Gregorian),
-            AnyCalendarKind::Hebrew => &AnyCalendar::Hebrew(Hebrew),
-            AnyCalendarKind::Indian => &AnyCalendar::Indian(Indian),
-            AnyCalendarKind::HijriTabularTypeIIFriday => {
-                const {
-                    &AnyCalendar::HijriTabular(Hijri::new_tabular(
-                        HijriTabularLeapYears::TypeII,
-                        HijriTabularEpoch::Friday,
-                    ))
-                }
-            }
-            AnyCalendarKind::HijriSimulatedMecca => {
-                // This calendar is currently unsupported by Temporal
-                &AnyCalendar::Iso(Iso)
-            }
-            AnyCalendarKind::HijriTabularTypeIIThursday => {
-                const {
-                    &AnyCalendar::HijriTabular(Hijri::new_tabular(
-                        HijriTabularLeapYears::TypeII,
-                        HijriTabularEpoch::Thursday,
-                    ))
-                }
-            }
-            AnyCalendarKind::HijriUmmAlQura => {
-                const { &AnyCalendar::HijriUmmAlQura(Hijri::new_umm_al_qura()) }
-            }
-            AnyCalendarKind::Iso => &AnyCalendar::Iso(Iso),
+        match kind {
+            AnyCalendarKind::Buddhist => Self::BUDDHIST,
+            AnyCalendarKind::Chinese => Self::CHINESE,
+            AnyCalendarKind::Coptic => Self::COPTIC,
+            AnyCalendarKind::Dangi => Self::DANGI,
+            AnyCalendarKind::Ethiopian => Self::ETHIOPIAN,
+            AnyCalendarKind::EthiopianAmeteAlem => Self::ETHIOPIAN_AMETE_ALEM,
+            AnyCalendarKind::Gregorian => Self::GREGORIAN,
+            AnyCalendarKind::Hebrew => Self::HEBREW,
+            AnyCalendarKind::Indian => Self::INDIAN,
+            AnyCalendarKind::HijriTabularTypeIIFriday => Self::HIJRI_TABULAR_FRIDAY,
+            // This calendar is currently unsupported by Temporal
+            AnyCalendarKind::HijriSimulatedMecca => Self::ISO,
+            AnyCalendarKind::HijriTabularTypeIIThursday => Self::HIJRI_TABULAR_THURSDAY,
+            AnyCalendarKind::HijriUmmAlQura => Self::HIJRI_UMM_AL_QURA,
+            AnyCalendarKind::Iso => Self::ISO,
             #[allow(
                 deprecated,
                 reason = "need to match on JapaneseExtended for exhaustiveness"
             )]
-            AnyCalendarKind::Japanese | AnyCalendarKind::JapaneseExtended => {
-                const { &AnyCalendar::Japanese(Japanese::new()) }
-            }
-            AnyCalendarKind::Persian => &AnyCalendar::Persian(Persian),
-            AnyCalendarKind::Roc => &AnyCalendar::Roc(Roc),
+            AnyCalendarKind::Japanese | AnyCalendarKind::JapaneseExtended => Self::JAPANESE,
+            AnyCalendarKind::Persian => Self::PERSIAN,
+            AnyCalendarKind::Roc => Self::ROC,
             _ => {
                 debug_assert!(
                     false,
                     "Unreachable: match must handle all variants of `AnyCalendarKind`"
                 );
-                &AnyCalendar::Iso(Iso)
+                Self::ISO
             }
-        };
-
-        Self(Ref(cal))
+        }
     }
 
     /// Returns a `Calendar` from the a slice of UTF-8 encoded bytes.
