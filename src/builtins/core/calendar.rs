@@ -32,7 +32,7 @@ use icu_calendar::{
     preferences::CalendarAlgorithm,
     types::DateDuration as IcuDateDuration,
     types::DateFields,
-    Gregorian,
+    Date, Gregorian,
 };
 use icu_locale_core::extensions::unicode::Value;
 use tinystr::TinyAsciiStr;
@@ -330,12 +330,12 @@ impl Calendar {
         options.overflow = Some(overflow.into());
         options.missing_fields_strategy = Some(MissingFieldsStrategy::Reject);
 
-        let calendar_date = self.0.from_fields(fields, options)?;
-        let iso = self.0.to_iso(&calendar_date);
+        let calendar_date = Date::try_from_fields(fields, options, self.0)?;
+        let iso = calendar_date.to_calendar(Iso);
         PlainDate::new_with_overflow(
-            Iso.extended_year(&iso),
-            Iso.month(&iso).ordinal,
-            Iso.day_of_month(&iso).0,
+            iso.year().extended_year(),
+            iso.month().ordinal,
+            iso.day_of_month().0,
             self.clone(),
             overflow,
         )
@@ -395,10 +395,10 @@ impl Calendar {
                     fields_max.day = Some(40);
                     let fields_min = DateFields::try_from(&fields_min)?;
                     let fields_max = DateFields::try_from(&fields_max)?;
-                    let date_min = self.0.from_fields(fields_min, options)?;
-                    let date_max = self.0.from_fields(fields_max, options)?;
-                    let iso_min = IsoDate::from_icu4x(self.0.to_iso(&date_min));
-                    let iso_max = IsoDate::from_icu4x(self.0.to_iso(&date_max));
+                    let date_min = Date::try_from_fields(fields_min, options, self.0)?;
+                    let date_max = Date::try_from_fields(fields_max, options, self.0)?;
+                    let iso_min = IsoDate::from_icu4x(date_min.to_calendar(Iso));
+                    let iso_max = IsoDate::from_icu4x(date_max.to_calendar(Iso));
 
                     // If *both* are an error, then no date in this year maps to the ISO year range.
                     if iso_min.check_within_limits().is_err()
@@ -410,11 +410,11 @@ impl Calendar {
                 let mut options = DateFromFieldsOptions::default();
                 options.overflow = Some(overflow.into());
                 options.missing_fields_strategy = Some(MissingFieldsStrategy::Reject);
-                let calendar_date = self.0.from_fields(date_fields, options)?;
+                let calendar_date = Date::try_from_fields(date_fields, options, self.0)?;
 
                 fields = CalendarFields {
-                    month_code: Some(MonthCode(self.0.month(&calendar_date).to_input().code().0)),
-                    day: Some(self.0.day_of_month(&calendar_date).0),
+                    month_code: Some(MonthCode(calendar_date.month().to_input().code().0)),
+                    day: Some(calendar_date.day_of_month().0),
                     ..Default::default()
                 };
             }
@@ -440,27 +440,27 @@ impl Calendar {
         }
         options.missing_fields_strategy = Some(MissingFieldsStrategy::Ecma);
 
-        let mut calendar_date = self.0.from_fields(fields, options)?;
+        let mut calendar_date = Date::try_from_fields(fields, options, self.0)?;
 
         // The MonthDay algorithm wants us to resolve a date *with* the provided year,
         // if one was provided, but then use a reference year afterwards.
         // So if a year was provided, we reresolve.
         if fields.era_year.is_some() || fields.extended_year.is_some() {
             let mut fields2 = DateFields::default();
-            fields2.day = Some(self.0.day_of_month(&calendar_date).0);
-            let code = self.0.month(&calendar_date).to_input().code();
+            fields2.day = Some(calendar_date.day_of_month().0);
+            let code = calendar_date.month().to_input().code();
             fields2.month_code = Some(code.0.as_bytes());
 
-            calendar_date = self.0.from_fields(fields2, options)?;
+            calendar_date = Date::try_from_fields(fields2, options, self.0)?;
         }
 
-        let iso = self.0.to_iso(&calendar_date);
+        let iso = calendar_date.to_calendar(Iso);
         PlainMonthDay::new_with_overflow(
-            Iso.month(&iso).ordinal,
-            Iso.day_of_month(&iso).0,
+            iso.month().ordinal,
+            iso.day_of_month().0,
             self.clone(),
             overflow,
-            Some(Iso.extended_year(&iso)),
+            Some(iso.year().extended_year()),
         )
     }
 
@@ -495,12 +495,12 @@ impl Calendar {
             return Err(TemporalError::r#type().with_message("Must specify year for YearMonth"));
         }
         options.missing_fields_strategy = Some(MissingFieldsStrategy::Ecma);
-        let calendar_date = self.0.from_fields(fields, options)?;
-        let iso = self.0.to_iso(&calendar_date);
+        let calendar_date = Date::try_from_fields(fields, options, self.0)?;
+        let iso = calendar_date.to_calendar(Iso);
         PlainYearMonth::new_with_overflow(
-            Iso.year_info(&iso).year,
-            Iso.month(&iso).ordinal,
-            Some(Iso.day_of_month(&iso).0),
+            iso.year().extended_year(),
+            iso.month().ordinal,
+            Some(iso.day_of_month().0),
             self.clone(),
             overflow,
         )
@@ -536,15 +536,14 @@ impl Calendar {
         early_constrain_date_duration(&duration)?;
         let mut options = DateAddOptions::default();
         options.overflow = Some(overflow.into());
-        let calendar_date = self.0.from_rata_die(date.to_rd());
+        let calendar_date = Date::from_rata_die(date.to_rd(), self.0);
+        let added = calendar_date.try_added_with_options(duration, options)?;
 
-        let added = self.0.add(&calendar_date, duration, options)?;
-
-        let iso = self.0.to_iso(&added);
+        let iso = added.to_calendar(Iso);
         PlainDate::new_with_overflow(
-            Iso.extended_year(&iso),
-            Iso.month(&iso).ordinal,
-            Iso.day_of_month(&iso).0,
+            iso.year().extended_year(),
+            iso.month().ordinal,
+            iso.day_of_month().0,
             self.clone(),
             overflow,
         )
@@ -563,10 +562,13 @@ impl Calendar {
         }
         let mut options = DateDifferenceOptions::default();
         options.largest_unit = Some(largest_unit.try_into()?);
-        let calendar_date1 = self.0.from_rata_die(one.to_rd());
-        let calendar_date2 = self.0.from_rata_die(two.to_rd());
+        let calendar_date1 = Date::from_rata_die(one.to_rd(), self.0);
+        let calendar_date2 = Date::from_rata_die(two.to_rd(), self.0);
 
-        let added = self.0.until(&calendar_date1, &calendar_date2, options);
+        // Infallible for supported calendars
+        let added = calendar_date1
+            .try_until_with_options(&calendar_date2, options)
+            .unwrap_or_default();
 
         let days = added.days.into();
         let mut duration = DateDuration::new(
@@ -587,11 +589,8 @@ impl Calendar {
         if self.is_iso() {
             return None;
         }
-        let calendar_date = self.0.from_rata_die(iso_date.to_rd());
-        self.0
-            .year_info(&calendar_date)
-            .era()
-            .map(|era_info| era_info.era)
+        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        calendar_date.year().era().map(|era_info| era_info.era)
     }
 
     /// `CalendarEraYear`
@@ -599,11 +598,8 @@ impl Calendar {
         if self.is_iso() {
             return None;
         }
-        let calendar_date = self.0.from_rata_die(iso_date.to_rd());
-        self.0
-            .year_info(&calendar_date)
-            .era()
-            .map(|era_info| era_info.year)
+        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        calendar_date.year().era().map(|era_info| era_info.year)
     }
 
     /// `CalendarArithmeticYear`
@@ -611,8 +607,8 @@ impl Calendar {
         if self.is_iso() {
             return iso_date.year;
         }
-        let calendar_date = self.0.from_rata_die(iso_date.to_rd());
-        self.0.extended_year(&calendar_date)
+        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        calendar_date.year().extended_year()
     }
 
     /// `CalendarMonth`
@@ -620,14 +616,14 @@ impl Calendar {
         if self.is_iso() {
             return iso_date.month;
         }
-        let calendar_date = self.0.from_rata_die(iso_date.to_rd());
-        self.0.month(&calendar_date).ordinal
+        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        calendar_date.month().ordinal
     }
 
     /// `CalendarMonthCode`
     pub fn month_code(&self, iso_date: &IsoDate) -> MonthCode {
-        let calendar_date = self.0.from_rata_die(iso_date.to_rd());
-        MonthCode(self.0.month(&calendar_date).to_input().code().0)
+        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        MonthCode(calendar_date.month().to_input().code().0)
     }
 
     /// `CalendarDay`
@@ -635,8 +631,8 @@ impl Calendar {
         if self.is_iso() {
             return iso_date.day;
         }
-        let calendar_date = self.0.from_rata_die(iso_date.to_rd());
-        self.0.day_of_month(&calendar_date).0
+        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        calendar_date.day_of_month().0
     }
 
     /// `CalendarDayOfWeek`
@@ -646,8 +642,8 @@ impl Calendar {
 
     /// `CalendarDayOfYear`
     pub fn day_of_year(&self, iso_date: &IsoDate) -> u16 {
-        let calendar_date = self.0.from_rata_die(iso_date.to_rd());
-        self.0.day_of_year(&calendar_date).0
+        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        calendar_date.day_of_year().0
     }
 
     /// `CalendarWeekOfYear`
@@ -675,14 +671,14 @@ impl Calendar {
 
     /// `CalendarDaysInMonth`
     pub fn days_in_month(&self, iso_date: &IsoDate) -> u16 {
-        let calendar_date = self.0.from_rata_die(iso_date.to_rd());
-        self.0.days_in_month(&calendar_date) as u16
+        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        calendar_date.days_in_month() as u16
     }
 
     /// `CalendarDaysInYear`
     pub fn days_in_year(&self, iso_date: &IsoDate) -> u16 {
-        let calendar_date = self.0.from_rata_die(iso_date.to_rd());
-        self.0.days_in_year(&calendar_date)
+        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        calendar_date.days_in_year()
     }
 
     /// `CalendarMonthsInYear`
@@ -690,14 +686,14 @@ impl Calendar {
         if self.is_iso() {
             return 12;
         }
-        let calendar_date = self.0.from_rata_die(iso_date.to_rd());
-        self.0.months_in_year(&calendar_date) as u16
+        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        calendar_date.months_in_year() as u16
     }
 
     /// `CalendarInLeapYear`
     pub fn in_leap_year(&self, iso_date: &IsoDate) -> bool {
-        let calendar_date = self.0.from_rata_die(iso_date.to_rd());
-        self.0.is_in_leap_year(&calendar_date)
+        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        calendar_date.is_in_leap_year()
     }
 
     /// Returns the identifier of this calendar slot.

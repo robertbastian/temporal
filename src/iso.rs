@@ -40,7 +40,7 @@ use crate::{
     unix_time::EpochNanoseconds,
     utils, TemporalResult, TemporalUnwrap, NS_PER_DAY,
 };
-use icu_calendar::{Calendar as IcuCalendar, Date as IcuDate, Iso};
+use icu_calendar::{Date as IcuDate, Iso};
 use num_traits::{cast::FromPrimitive, Euclid};
 
 /// `IsoDateTime` is the record of the `IsoDate` and `IsoTime` internal slots.
@@ -514,11 +514,11 @@ impl IsoDate {
         calendrical_calculations::gregorian::fixed_from_gregorian(self.year, self.month, self.day)
     }
 
-    pub(crate) fn from_icu4x(date: <Iso as IcuCalendar>::DateInner) -> Self {
+    pub(crate) fn from_icu4x(date: IcuDate<Iso>) -> Self {
         Self::new_unchecked(
-            Iso.extended_year(&date),
-            Iso.month(&date).ordinal,
-            Iso.day_of_month(&date).0,
+            date.year().extended_year(),
+            date.month().ordinal,
+            date.day_of_month().0,
         )
     }
 }
