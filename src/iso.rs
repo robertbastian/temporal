@@ -505,15 +505,19 @@ impl IsoDate {
 }
 
 impl IsoDate {
-    /// Creates `[[ISOYear]]`, `[[isoMonth]]`, `[[isoDay]]` fields from `ICU4X`'s `Date<Iso>` struct.
+    /// Creates `ICU4X`'s `Date<Iso>` struct from `[[ISOYear]]`, `[[isoMonth]]`, `[[isoDay]]` fields.
     pub(crate) fn to_icu4x_iso(self) -> IcuDate<Iso> {
-        IcuDate::from_rata_die(self.to_rd(), Iso)
+        IcuDate::try_new_iso(self.year, self.month, self.day).unwrap_or_else(|_| {
+            IcuDate::from_rata_die(
+                icu_calendar::types::RataDie::new(utils::epoch_days_from_gregorian_date(
+                    self.year, self.month, self.day,
+                )),
+                Iso,
+            )
+        })
     }
 
-    pub(crate) fn to_rd(self) -> icu_calendar::types::RataDie {
-        calendrical_calculations::gregorian::fixed_from_gregorian(self.year, self.month, self.day)
-    }
-
+    /// Creates `[[ISOYear]]`, `[[isoMonth]]`, `[[isoDay]]` fields from `ICU4X`'s `Date<Iso>` struct.
     pub(crate) fn from_icu4x(date: IcuDate<Iso>) -> Self {
         Self::new_unchecked(
             date.year().extended_year(),

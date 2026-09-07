@@ -877,7 +877,6 @@ dependencies = [
 name = "temporal_rs"
 version = "0.2.6"
 dependencies = [
- "calendrical_calculations",
  "core_maths",
  "iana-time-zone",
  "icu_calendar",

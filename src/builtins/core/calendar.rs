@@ -536,7 +536,7 @@ impl Calendar {
         early_constrain_date_duration(&duration)?;
         let mut options = DateAddOptions::default();
         options.overflow = Some(overflow.into());
-        let calendar_date = Date::from_rata_die(date.to_rd(), self.0);
+        let calendar_date = date.to_icu4x_iso().to_calendar(self.0);
         let added = calendar_date.try_added_with_options(duration, options)?;
 
         let iso = added.to_calendar(Iso);
@@ -562,8 +562,8 @@ impl Calendar {
         }
         let mut options = DateDifferenceOptions::default();
         options.largest_unit = Some(largest_unit.try_into()?);
-        let calendar_date1 = Date::from_rata_die(one.to_rd(), self.0);
-        let calendar_date2 = Date::from_rata_die(two.to_rd(), self.0);
+        let calendar_date1 = one.to_icu4x_iso().to_calendar(self.0);
+        let calendar_date2 = two.to_icu4x_iso().to_calendar(self.0);
 
         // Infallible for supported calendars
         let added = calendar_date1
@@ -589,7 +589,7 @@ impl Calendar {
         if self.is_iso() {
             return None;
         }
-        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        let calendar_date = iso_date.to_icu4x_iso().to_calendar(self.0);
         calendar_date.year().era().map(|era_info| era_info.era)
     }
 
@@ -598,7 +598,7 @@ impl Calendar {
         if self.is_iso() {
             return None;
         }
-        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        let calendar_date = iso_date.to_icu4x_iso().to_calendar(self.0);
         calendar_date.year().era().map(|era_info| era_info.year)
     }
 
@@ -607,7 +607,7 @@ impl Calendar {
         if self.is_iso() {
             return iso_date.year;
         }
-        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        let calendar_date = iso_date.to_icu4x_iso().to_calendar(self.0);
         calendar_date.year().extended_year()
     }
 
@@ -616,13 +616,13 @@ impl Calendar {
         if self.is_iso() {
             return iso_date.month;
         }
-        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        let calendar_date = iso_date.to_icu4x_iso().to_calendar(self.0);
         calendar_date.month().ordinal
     }
 
     /// `CalendarMonthCode`
     pub fn month_code(&self, iso_date: &IsoDate) -> MonthCode {
-        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        let calendar_date = iso_date.to_icu4x_iso().to_calendar(self.0);
         MonthCode(calendar_date.month().to_input().code().0)
     }
 
@@ -631,7 +631,7 @@ impl Calendar {
         if self.is_iso() {
             return iso_date.day;
         }
-        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        let calendar_date = iso_date.to_icu4x_iso().to_calendar(self.0);
         calendar_date.day_of_month().0
     }
 
@@ -642,7 +642,7 @@ impl Calendar {
 
     /// `CalendarDayOfYear`
     pub fn day_of_year(&self, iso_date: &IsoDate) -> u16 {
-        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        let calendar_date = iso_date.to_icu4x_iso().to_calendar(self.0);
         calendar_date.day_of_year().0
     }
 
@@ -671,13 +671,13 @@ impl Calendar {
 
     /// `CalendarDaysInMonth`
     pub fn days_in_month(&self, iso_date: &IsoDate) -> u16 {
-        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        let calendar_date = iso_date.to_icu4x_iso().to_calendar(self.0);
         calendar_date.days_in_month() as u16
     }
 
     /// `CalendarDaysInYear`
     pub fn days_in_year(&self, iso_date: &IsoDate) -> u16 {
-        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        let calendar_date = iso_date.to_icu4x_iso().to_calendar(self.0);
         calendar_date.days_in_year()
     }
 
@@ -686,13 +686,13 @@ impl Calendar {
         if self.is_iso() {
             return 12;
         }
-        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        let calendar_date = iso_date.to_icu4x_iso().to_calendar(self.0);
         calendar_date.months_in_year() as u16
     }
 
     /// `CalendarInLeapYear`
     pub fn in_leap_year(&self, iso_date: &IsoDate) -> bool {
-        let calendar_date = Date::from_rata_die(iso_date.to_rd(), self.0);
+        let calendar_date = iso_date.to_icu4x_iso().to_calendar(self.0);
         calendar_date.is_in_leap_year()
     }
 

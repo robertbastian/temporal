@@ -93,7 +93,6 @@ timezone_provider = { workspace = true }
 # System time feature
 web-time = { workspace = true, optional = true }
 iana-time-zone = { workspace = true, optional = true }
-calendrical_calculations = "0.2.4"
 
 [dev-dependencies]
 timezone_provider = { workspace = true, features = ["zoneinfo64", "experimental_tzif"] }
